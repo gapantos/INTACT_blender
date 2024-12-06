@@ -75,7 +75,8 @@ class CroppingCubeCreation(bpy.types.Operator):
                 cropct_material_name = "crop_transparent"
                 cropct_material = bpy.data.materials.new(name=cropct_material_name)
                 cropct_material.use_nodes = True
-                cropct_material.blend_method = "HASHED"
+                if bpy.app.version <= (4, 2, 0):
+                    cropct_material.blend_method = "HASHED"
                 tree_nodes = cropct_material.node_tree.nodes
                 tree_nodes['Principled BSDF'].inputs["Alpha"].default_value = 0
 
@@ -193,7 +194,8 @@ def enable_ct_alpha_slice(context):
             alpha_material = bpy.data.materials.new(name=alpha_material_name)
             alpha_material.use_nodes = True
             alpha_material.use_fake_user = True
-            alpha_material.blend_method = "HASHED"
+            if bpy.app.version <= (4, 2, 0):
+                alpha_material.blend_method = "HASHED"
             tree_nodes = alpha_material.node_tree.nodes
             tree_nodes.clear()
 

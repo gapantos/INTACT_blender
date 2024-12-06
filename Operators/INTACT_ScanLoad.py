@@ -532,7 +532,10 @@ class INTACT_OT_Volume_Render(bpy.types.Operator):
         print("Voxel Rendering START...")
         utils.VolumeRender(ImageInfo, GpShader, ShadersBlendFile)
         scn = bpy.context.scene
-        scn.render.engine = "BLENDER_EEVEE"
+        if bpy.app.version >= (4, 2, 0):
+            scn.render.engine = "BLENDER_EEVEE_NEXT"
+        else:
+            scn.render.engine = "BLENDER_EEVEE"
         INTACT_Props.GroupNodeName = GpShader
         INTACT_Props.ThresholdGroupNodeName = GpThreshold
 

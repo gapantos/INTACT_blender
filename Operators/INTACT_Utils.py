@@ -553,8 +553,9 @@ def VolumeRender(ImageInfo, GpShader, ShadersBlendFile):
 
         obj.active_material = mat
 
-        mat.blend_method = "HASHED"
-        mat.shadow_method = "HASHED"
+        if bpy.app.version <= (4, 2, 0):
+            mat.blend_method = "HASHED"
+            mat.shadow_method = "HASHED"
 
         # END LOOP ##################################
 
@@ -591,22 +592,26 @@ def VolumeRender(ImageInfo, GpShader, ShadersBlendFile):
 
 def Scene_Settings():
     scn = bpy.context.scene
-    scn.render.engine = "BLENDER_EEVEE"
+    if bpy.app.version >= (4, 2, 0):
+        scn.render.engine = "BLENDER_EEVEE_NEXT"
+        scn.eevee.use_raytracing = True
+    else:
+        scn.render.engine = "BLENDER_EEVEE"
+        scn.eevee.use_gtao_bounce = True
+        scn.eevee.use_gtao_bent_normals = True
+        scn.eevee.gtao_factor = 2.0
+        scn.eevee.use_soft_shadows = True
+        scn.eevee.shadow_cube_size = "512"
+        scn.eevee.shadow_cascade_size = "512"
+        scn.eevee.use_ssr = True
     scn.eevee.use_gtao = True
     scn.eevee.gtao_distance = 15
-    scn.eevee.gtao_factor = 2.0
     scn.eevee.gtao_quality = 0.4
-    scn.eevee.use_gtao_bounce = True
-    scn.eevee.use_gtao_bent_normals = True
-    scn.eevee.shadow_cube_size = "512"
-    scn.eevee.shadow_cascade_size = "512"
-    scn.eevee.use_soft_shadows = True
     scn.eevee.taa_samples = 16
     if bpy.app.version >= (4, 0, 0):
         scn.view_settings.look = "AgX - High Contrast"
     else:
         scn.view_settings.look = "High Contrast"
-    scn.eevee.use_ssr = True
 
     # boost the near clip distance, to avoid z fighting of planes on boolean 3D mesh + the end clip distance
     # to avoid cutting off the back end of larger meshes
