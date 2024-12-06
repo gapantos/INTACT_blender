@@ -140,6 +140,15 @@ def CtxOverride(context):
     return Override
 
 
+def execute_in_context(context, operator, *args, **kwargs):
+    """Execute a Blender operator in a given context"""
+    if bpy.app.version >= (4, 0, 0):
+        with bpy.context.temp_override(**context):
+            operator(*args, **kwargs)
+    else:
+        operator(context, *args, **kwargs)
+
+
 def AbsPath(P):
     # if P.startswith('//') :
     P = abspath(bpy.path.abspath(P))
@@ -564,13 +573,9 @@ def VolumeRender(ImageInfo, GpShader, ShadersBlendFile):
     bpy.ops.object.origin_set(type="ORIGIN_GEOMETRY", center="MEDIAN")
 
     Voxel.matrix_world = TransformMatrix
-    context_override = CtxOverride(bpy.context)
 
-    if bpy.app.version >= (4, 0, 0):
-        with bpy.context.temp_override(**context_override):
-            bpy.ops.view3d.view_selected(use_all_regions=False)
-    else:
-        bpy.ops.view3d.view_selected(context_override, use_all_regions=False)
+    context_override = CtxOverride(bpy.context)
+    execute_in_context(context_override, bpy.ops.view3d.view_selected, use_all_regions=False)
 
     for scr in bpy.data.screens:
         for area in [ar for ar in scr.areas if ar.type == "VIEW_3D"]:
@@ -753,8 +758,8 @@ def SlicesUpdateAll(scene):
 
 
 def Add_Cam_To_Plane(Plane, CamDistance, ClipOffset):
-    Override, _, _ = CtxOverride(bpy.context)
-    bpy.ops.object.camera_add(Override)
+    context_override = CtxOverride(bpy.context)
+    execute_in_context(context_override, bpy.ops.object.camera_add)
     Cam = bpy.context.object
     Cam.name = f"{Plane.name}_CAM"
     Cam.data.name = f"{Plane.name}_CAM_data"
@@ -1349,8 +1354,8 @@ def INTACT_MultiView_Toggle(Prefix):
     LayoutScreen = bpy.data.screens["Layout"]
     LayoutArea3D = [area for area in LayoutScreen.areas if area.type == "VIEW_3D"][0]
 
-    Override = {"window": MainWindow, "screen": LayoutScreen, "area": LayoutArea3D}
-    bpy.ops.screen.area_dupli(Override, "INVOKE_DEFAULT")
+    context_override = {"window": MainWindow, "screen": LayoutScreen, "area": LayoutArea3D}
+    execute_in_context(context_override, bpy.ops.screen.area_dupli, "INVOKE_DEFAULT")
 
     # Get MultiView (Window, Screen, Area3D, Space3D, Region3D) and set prefferences :
     MultiView_Window = WM.windows[-1]
@@ -1372,7 +1377,7 @@ def INTACT_MultiView_Toggle(Prefix):
 
     # 1rst Step : Vertical Split .
 
-    Override = {
+    context_override = {
         "window": MultiView_Window,
         "screen": MultiView_Screen,
         "area": MultiView_Area3D,
@@ -1380,7 +1385,8 @@ def INTACT_MultiView_Toggle(Prefix):
         "region": MultiView_Region3D,
     }
 
-    bpy.ops.screen.area_split(Override, direction="VERTICAL", factor=1 / 5)
+    execute_in_context(context_override, bpy.ops.screen.area_split,
+                       direction="VERTICAL", factor=1/5)
     MultiView_Screen.areas[0].type = "OUTLINER"
     MultiView_Screen.areas[1].type = "OUTLINER"
 
@@ -1388,15 +1394,15 @@ def INTACT_MultiView_Toggle(Prefix):
     Active_Area = MultiView_Screen.areas[0]
     Active_Space = [space for space in Active_Area.spaces if space.type == "VIEW_3D"][0]
     Active_Region = [reg for reg in Active_Area.regions if reg.type == "WINDOW"][0]
-    Override = {
+    context_override = {
         "window": MultiView_Window,
         "screen": MultiView_Screen,
         "area": Active_Area,
         "space_data": Active_Space,
         "region": Active_Region,
     }
-
-    bpy.ops.screen.area_split(Override, direction="HORIZONTAL", factor=1 / 2)
+    execute_in_context(context_override, bpy.ops.screen.area_split,
+                       direction="HORIZONTAL", factor=1/2)
     MultiView_Screen.areas[0].type = "VIEW_3D"
     MultiView_Screen.areas[1].type = "VIEW_3D"
     MultiView_Screen.areas[2].type = "VIEW_3D"
@@ -1405,15 +1411,15 @@ def INTACT_MultiView_Toggle(Prefix):
     Active_Area = MultiView_Screen.areas[0]
     Active_Space = [space for space in Active_Area.spaces if space.type == "VIEW_3D"][0]
     Active_Region = [reg for reg in Active_Area.regions if reg.type == "WINDOW"][0]
-    Override = {
+    context_override = {
         "window": MultiView_Window,
         "screen": MultiView_Screen,
         "area": Active_Area,
         "space_data": Active_Space,
         "region": Active_Region,
     }
-
-    bpy.ops.screen.area_split(Override, direction="VERTICAL", factor=1 / 2)
+    execute_in_context(context_override, bpy.ops.screen.area_split,
+                       direction="VERTICAL", factor=1/2)
     MultiView_Screen.areas[0].type = "OUTLINER"
     MultiView_Screen.areas[1].type = "OUTLINER"
     MultiView_Screen.areas[2].type = "OUTLINER"
@@ -1423,15 +1429,15 @@ def INTACT_MultiView_Toggle(Prefix):
     Active_Area = MultiView_Screen.areas[2]
     Active_Space = [space for space in Active_Area.spaces if space.type == "VIEW_3D"][0]
     Active_Region = [reg for reg in Active_Area.regions if reg.type == "WINDOW"][0]
-    Override = {
+    context_override = {
         "window": MultiView_Window,
         "screen": MultiView_Screen,
         "area": Active_Area,
         "space_data": Active_Space,
         "region": Active_Region,
     }
-
-    bpy.ops.screen.area_split(Override, direction="VERTICAL", factor=1 / 2)
+    execute_in_context(context_override, bpy.ops.screen.area_split,
+                       direction="VERTICAL", factor=1/2)
     MultiView_Screen.areas[0].type = "VIEW_3D"
     MultiView_Screen.areas[1].type = "VIEW_3D"
     MultiView_Screen.areas[2].type = "VIEW_3D"
@@ -1442,15 +1448,15 @@ def INTACT_MultiView_Toggle(Prefix):
     Active_Area = MultiView_Screen.areas[1]
     Active_Space = [space for space in Active_Area.spaces if space.type == "VIEW_3D"][0]
     Active_Region = [reg for reg in Active_Area.regions if reg.type == "WINDOW"][0]
-    Override = {
+    context_override = {
         "window": MultiView_Window,
         "screen": MultiView_Screen,
         "area": Active_Area,
         "space_data": Active_Space,
         "region": Active_Region,
     }
-
-    bpy.ops.screen.area_split(Override, direction="HORIZONTAL", factor=1 / 2)
+    execute_in_context(context_override, bpy.ops.screen.area_split,
+                       direction="HORIZONTAL", factor=1/2)
 
     MultiView_Screen.areas[1].type = "OUTLINER"
     MultiView_Screen.areas[5].type = "PROPERTIES"
@@ -1463,14 +1469,13 @@ def INTACT_MultiView_Toggle(Prefix):
                 space for space in MultiView_Area3D.spaces if space.type == "VIEW_3D"
             ][0]
 
-            Override = {
+            context_override = {
                 "window": MultiView_Window,
                 "screen": MultiView_Screen,
                 "area": MultiView_Area3D,
                 "space_data": MultiView_Space3D,
             }
-
-            bpy.ops.wm.tool_set_by_id(Override, name="builtin.move")
+            execute_in_context(context_override, bpy.ops.wm.tool_set_by_id, name="builtin.move")
             MultiView_Space3D.overlay.show_text = True
             MultiView_Space3D.show_region_ui = False
             MultiView_Space3D.show_region_toolbar = True

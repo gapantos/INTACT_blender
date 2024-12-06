@@ -488,22 +488,24 @@ class INTACT_OT_AddSlices(bpy.types.Operator):
             SLICES_POINTER.show_in_front = True
             SLICES_POINTER.name = f"{Prefix}_SLICES_POINTER"
 
-            Override = utils.CtxOverride(bpy.context)
-
-            bpy.ops.object.select_all(Override, action="DESELECT")
+            context_override = utils.CtxOverride(bpy.context)
+            utils.execute_in_context(context_override, bpy.ops.object.select_all,
+                                     action="DESELECT")
             AxialPlane.select_set(True)
             CoronalPlane.select_set(True)
             SagitalPlane.select_set(True)
             SLICES_POINTER.select_set(True)
             bpy.context.view_layer.objects.active = SLICES_POINTER
             bpy.ops.object.parent_set(type="OBJECT", keep_transform=True)
-            bpy.ops.object.select_all(Override, action="DESELECT")
+            utils.execute_in_context(context_override, bpy.ops.object.select_all,
+                                     action="DESELECT")
             SLICES_POINTER.select_set(True)
             Vol.select_set(True)
             bpy.context.view_layer.objects.active = Vol
             bpy.ops.object.parent_set(type="OBJECT", keep_transform=True)
 
-            bpy.ops.object.select_all(Override, action="DESELECT")
+            utils.execute_in_context(context_override, bpy.ops.object.select_all,
+                                     action="DESELECT")
             SLICES_POINTER.select_set(True)
             bpy.context.view_layer.objects.active = SLICES_POINTER
             utils.MoveToCollection(obj=SLICES_POINTER, CollName="SLICES_POINTERS")
@@ -576,44 +578,45 @@ class INTACT_OT_MultiView(bpy.types.Operator):
             AXIAL_Space3D.use_local_collections = True
             AXIAL_Space3D.use_local_camera = True
             AXIAL_Space3D.camera = AxialCam
-            Override = {
+            context_override = {
                 "window": MultiView_Window,
                 "screen": MultiView_Screen,
                 "area": AXIAL,
                 "space_data": AXIAL_Space3D,
                 "region": AXIAL_Region,
             }
-            bpy.ops.view3d.view_camera(Override)
+            utils.execute_in_context(context_override, bpy.ops.view3d.view_camera)
 
             # CORONAL Cam view toggle :
             CoronalCam = bpy.data.objects.get(f"{CoronalPlane.name}_CAM")
             CORONAL_Space3D.use_local_collections = True
             CORONAL_Space3D.use_local_camera = True
             CORONAL_Space3D.camera = CoronalCam
-            Override = {
+            context_override = {
                 "window": MultiView_Window,
                 "screen": MultiView_Screen,
                 "area": CORONAL,
                 "space_data": CORONAL_Space3D,
                 "region": CORONAL_Region,
             }
-            bpy.ops.view3d.view_camera(Override)
+            utils.execute_in_context(context_override, bpy.ops.view3d.view_camera)
 
             # AXIAL Cam view toggle :
             SagitalCam = bpy.data.objects.get(f"{SagitalPlane.name}_CAM")
             SAGITAL_Space3D.use_local_collections = True
             SAGITAL_Space3D.use_local_camera = True
             SAGITAL_Space3D.camera = SagitalCam
-            Override = {
+            context_override = {
                 "window": MultiView_Window,
                 "screen": MultiView_Screen,
                 "area": SAGITAL,
                 "space_data": SAGITAL_Space3D,
                 "region": SAGITAL_Region,
             }
-            bpy.ops.view3d.view_camera(Override)
+            utils.execute_in_context(context_override, bpy.ops.view3d.view_camera)
 
-            bpy.ops.object.select_all(Override, action="DESELECT")
+            utils.execute_in_context(context_override, bpy.ops.object.select_all,
+                                     action="DESELECT")
             SLICES_POINTER.select_set(True)
             bpy.context.view_layer.objects.active = SLICES_POINTER
 
