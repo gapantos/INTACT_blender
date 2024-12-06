@@ -146,11 +146,7 @@ def save_blend_file(user_project_dir):
     ProjectName = Split[-1] or Split[-2]
     BlendFile = f"{ProjectName}_CT-SCAN.blend"
     Blendpath = join(user_project_dir, BlendFile)
-
-    if not exists(Blendpath) or bpy.context.blend_data.filepath == Blendpath:
-        bpy.ops.wm.save_as_mainfile(filepath=Blendpath)
-    else:
-        bpy.ops.wm.save_mainfile()
+    bpy.ops.wm.save_as_mainfile(filepath=Blendpath)
 
 
 def read_dicom_image(user_dcm_dir):
