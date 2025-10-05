@@ -232,11 +232,7 @@ class INTACT_OT_MultiTreshSegment(bpy.types.Operator):
     def ImportMeshStl(self, Segment, SegmentStlPath, SegmentColor):
 
         # import stl to blender scene :
-        if bpy.app.version >= (4, 0, 0):
-            bpy.ops.wm.stl_import(filepath=SegmentStlPath)
-        else:
-            bpy.ops.import_mesh.stl(filepath=SegmentStlPath)
-
+        bpy.ops.wm.stl_import(filepath=SegmentStlPath)
         obj = bpy.context.object
         obj.name = f"{self.Prefix}_{Segment}_SEGMENTATION"
         obj.data.name = f"{self.Prefix}_{Segment}_mesh"

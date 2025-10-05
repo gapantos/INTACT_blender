@@ -25,10 +25,10 @@ bl_info = {
     "name": "IntACT",  ###################Addon name
     "author": "Francien Bossema, Paul van Laar & Kimberly Meechan",
     "version": (1, 0, 0),
-    "blender": (2, 90, 1),  ################# Blender working version
+    "blender": (4, 50, 1),  ################# Blender working version
     "location": "3D View -> UI SIDE PANEL ",
     "description": "3D Tools suite for Cultural Heritage X-ray CT and 3D scan visualisation",  ########### Addon description
-    "warning": "",
+    "warning": "Will not work with earlier versions of blender",
     "doc_url": "",
     "tracker_url": "",
     "category": "Cultural Heritage",  ################## Addon category

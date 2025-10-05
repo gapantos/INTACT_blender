@@ -146,7 +146,11 @@ def save_blend_file(user_project_dir):
     ProjectName = Split[-1] or Split[-2]
     BlendFile = f"{ProjectName}_CT-SCAN.blend"
     Blendpath = join(user_project_dir, BlendFile)
-    bpy.ops.wm.save_as_mainfile(filepath=Blendpath)
+
+    if not exists(Blendpath) or bpy.context.blend_data.filepath == Blendpath:
+        bpy.ops.wm.save_as_mainfile(filepath=Blendpath)
+    else:
+        bpy.ops.wm.save_mainfile()
 
 
 def read_dicom_image(user_dcm_dir):
@@ -528,10 +532,7 @@ class INTACT_OT_Volume_Render(bpy.types.Operator):
         print("Voxel Rendering START...")
         utils.VolumeRender(ImageInfo, GpShader, ShadersBlendFile)
         scn = bpy.context.scene
-        if bpy.app.version >= (4, 2, 0):
-            scn.render.engine = "BLENDER_EEVEE_NEXT"
-        else:
-            scn.render.engine = "BLENDER_EEVEE"
+        scn.render.engine = "BLENDER_EEVEE_NEXT"
         INTACT_Props.GroupNodeName = GpShader
         INTACT_Props.ThresholdGroupNodeName = GpThreshold
 

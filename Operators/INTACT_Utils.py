@@ -12,6 +12,7 @@ from bpy.app.handlers import persistent
 
 # Blender Imports :
 import bpy
+from bpy import context
 import bmesh
 from mathutils import Matrix, Vector, Euler, geometry as Geo
 
@@ -138,15 +139,6 @@ def CtxOverride(context):
         region3D,
     )
     return Override
-
-
-def execute_in_context(context, operator, *args, **kwargs):
-    """Execute a Blender operator in a given context"""
-    if bpy.app.version >= (4, 0, 0):
-        with bpy.context.temp_override(**context):
-            operator(*args, **kwargs)
-    else:
-        operator(context, *args, **kwargs)
 
 
 def AbsPath(P):
@@ -553,9 +545,8 @@ def VolumeRender(ImageInfo, GpShader, ShadersBlendFile):
 
         obj.active_material = mat
 
-        if bpy.app.version <= (4, 2, 0):
-            mat.blend_method = "HASHED"
-            mat.shadow_method = "HASHED"
+        mat.blend_method = "HASHED"
+        mat.surface_render_method = "DITHERED"
 
         # END LOOP ##################################
 
@@ -574,9 +565,13 @@ def VolumeRender(ImageInfo, GpShader, ShadersBlendFile):
     bpy.ops.object.origin_set(type="ORIGIN_GEOMETRY", center="MEDIAN")
 
     Voxel.matrix_world = TransformMatrix
-
     context_override = CtxOverride(bpy.context)
-    execute_in_context(context_override, bpy.ops.view3d.view_selected, use_all_regions=False)
+
+    if bpy.app.version >= (4, 0, 0):
+        with bpy.context.temp_override(**context_override):
+            bpy.ops.view3d.view_selected(use_all_regions=False)
+    else:
+        bpy.ops.view3d.view_selected(context_override, use_all_regions=False)
 
     for scr in bpy.data.screens:
         for area in [ar for ar in scr.areas if ar.type == "VIEW_3D"]:
@@ -592,26 +587,12 @@ def VolumeRender(ImageInfo, GpShader, ShadersBlendFile):
 
 def Scene_Settings():
     scn = bpy.context.scene
-    if bpy.app.version >= (4, 2, 0):
-        scn.render.engine = "BLENDER_EEVEE_NEXT"
-        scn.eevee.use_raytracing = True
-    else:
-        scn.render.engine = "BLENDER_EEVEE"
-        scn.eevee.use_gtao_bounce = True
-        scn.eevee.use_gtao_bent_normals = True
-        scn.eevee.gtao_factor = 2.0
-        scn.eevee.use_soft_shadows = True
-        scn.eevee.shadow_cube_size = "512"
-        scn.eevee.shadow_cascade_size = "512"
-        scn.eevee.use_ssr = True
+    scn.render.engine = "BLENDER_EEVEE_NEXT"
     scn.eevee.use_gtao = True
-    scn.eevee.gtao_distance = 15
-    scn.eevee.gtao_quality = 0.4
+    scn.eevee.fast_gi_quality = 0.4
+    scn.eevee.gi_cubemap_resolution = "512"
     scn.eevee.taa_samples = 16
-    if bpy.app.version >= (4, 0, 0):
-        scn.view_settings.look = "AgX - High Contrast"
-    else:
-        scn.view_settings.look = "High Contrast"
+    scn.view_settings.look = "High Contrast"
 
     # boost the near clip distance, to avoid z fighting of planes on boolean 3D mesh + the end clip distance
     # to avoid cutting off the back end of larger meshes
@@ -763,32 +744,33 @@ def SlicesUpdateAll(scene):
 
 
 def Add_Cam_To_Plane(Plane, CamDistance, ClipOffset):
-    context_override = CtxOverride(bpy.context)
-    execute_in_context(context_override, bpy.ops.object.camera_add)
-    Cam = bpy.context.object
-    Cam.name = f"{Plane.name}_CAM"
-    Cam.data.name = f"{Plane.name}_CAM_data"
-    Cam.data.type = "ORTHO"
-    Cam.data.ortho_scale = max(Plane.dimensions) * 1.1
-    Cam.data.display_size = 10
+    # Create a temporary context override
+    with bpy.context.temp_override(area=bpy.context.area):
+        bpy.ops.object.camera_add()
+        Cam = bpy.context.object
+        Cam.name = f"{Plane.name}_CAM"
+        Cam.data.name = f"{Plane.name}_CAM_data"
+        Cam.data.type = "ORTHO"
+        Cam.data.ortho_scale = max(Plane.dimensions) * 1.1
+        Cam.data.display_size = 10
 
-    Cam.matrix_world = Plane.matrix_world
-    bpy.ops.transform.translate(
-        value=(0, 0, CamDistance),
-        orient_type="LOCAL",
-        orient_matrix=Plane.matrix_world.to_3x3(),
-        orient_matrix_type="LOCAL",
-        constraint_axis=(False, False, True),
-    )
-    Cam.data.clip_start = CamDistance - ClipOffset
-    Cam.data.clip_end = CamDistance + ClipOffset
+        Cam.matrix_world = Plane.matrix_world
+        bpy.ops.transform.translate(
+            value=(0, 0, CamDistance),
+            orient_type="LOCAL",
+            orient_matrix=Plane.matrix_world.to_3x3(),
+            orient_matrix_type="LOCAL",
+            constraint_axis=(False, False, True),
+        )
+        Cam.data.clip_start = CamDistance - ClipOffset
+        Cam.data.clip_end = CamDistance + ClipOffset
 
-    Plane.select_set(True)
-    bpy.context.view_layer.objects.active = Plane
-    bpy.ops.object.parent_set(type="OBJECT", keep_transform=True)
-    Cam.hide_set(True)
-    Cam.select_set(False)
-    return Cam
+        Plane.select_set(True)
+        bpy.context.view_layer.objects.active = Plane
+        bpy.ops.object.parent_set(type="OBJECT", keep_transform=True)
+        Cam.hide_set(True)
+        Cam.select_set(False)
+        return Cam
 
 
 def set_slice_orientation(ct_volume, slice, slice_index):
@@ -1354,183 +1336,141 @@ def INTACT_MultiView_Toggle(Prefix):
 
     WM = bpy.context.window_manager
 
-    # Duplicate Area3D to new window :
+    # Duplicate Area3D to new window:
     MainWindow = WM.windows[0]
     LayoutScreen = bpy.data.screens["Layout"]
     LayoutArea3D = [area for area in LayoutScreen.areas if area.type == "VIEW_3D"][0]
 
-    context_override = {"window": MainWindow, "screen": LayoutScreen, "area": LayoutArea3D}
-    execute_in_context(context_override, bpy.ops.screen.area_dupli, "INVOKE_DEFAULT")
+    with bpy.context.temp_override(window=MainWindow, screen=LayoutScreen, area=LayoutArea3D):
+        bpy.ops.screen.area_dupli("INVOKE_DEFAULT")
 
-    # Get MultiView (Window, Screen, Area3D, Space3D, Region3D) and set prefferences :
-    MultiView_Window = WM.windows[-1]
-    MultiView_Screen = MultiView_Window.screen
+        # Get MultiView (Window, Screen, Area3D, Space3D, Region3D) and set preferences:
+        MultiView_Window = WM.windows[-1]
+        MultiView_Screen = MultiView_Window.screen
 
-    MultiView_Area3D = [
-        area for area in MultiView_Screen.areas if area.type == "VIEW_3D"
-    ][0]
-    MultiView_Space3D = [
-        space for space in MultiView_Area3D.spaces if space.type == "VIEW_3D"
-    ][0]
-    MultiView_Region3D = [
-        reg for reg in MultiView_Area3D.regions if reg.type == "WINDOW"
-    ][0]
+        MultiView_Area3D = [
+            area for area in MultiView_Screen.areas if area.type == "VIEW_3D"
+        ][0]
+        MultiView_Space3D = [
+            space for space in MultiView_Area3D.spaces if space.type == "VIEW_3D"
+        ][0]
+        MultiView_Region3D = [
+            reg for reg in MultiView_Area3D.regions if reg.type == "WINDOW"
+        ][0]
 
-    MultiView_Area3D.type = (
-        "CONSOLE"  # change area type for update : bug dont respond to spliting
-    )
+        MultiView_Area3D.type = "CONSOLE"  # Change area type for update: bug doesn't respond to splitting
 
-    # 1rst Step : Vertical Split .
+    # 1st Step: Vertical Split.
+    with bpy.context.temp_override(window=MultiView_Window, screen=MultiView_Screen, area=MultiView_Area3D, space_data=MultiView_Space3D, reg=MultiView_Region3D):
+        bpy.ops.screen.area_split(direction="VERTICAL", factor=1 / 5)
 
-    context_override = {
-        "window": MultiView_Window,
-        "screen": MultiView_Screen,
-        "area": MultiView_Area3D,
-        "space_data": MultiView_Space3D,
-        "region": MultiView_Region3D,
-    }
-
-    execute_in_context(context_override, bpy.ops.screen.area_split,
-                       direction="VERTICAL", factor=1/5)
     MultiView_Screen.areas[0].type = "OUTLINER"
     MultiView_Screen.areas[1].type = "OUTLINER"
 
-    # 2nd Step : Horizontal Split .
+    # 2nd Step: Horizontal Split.
     Active_Area = MultiView_Screen.areas[0]
     Active_Space = [space for space in Active_Area.spaces if space.type == "VIEW_3D"][0]
     Active_Region = [reg for reg in Active_Area.regions if reg.type == "WINDOW"][0]
-    context_override = {
-        "window": MultiView_Window,
-        "screen": MultiView_Screen,
-        "area": Active_Area,
-        "space_data": Active_Space,
-        "region": Active_Region,
-    }
-    execute_in_context(context_override, bpy.ops.screen.area_split,
-                       direction="HORIZONTAL", factor=1/2)
+
+    with bpy.context.temp_override(window=MultiView_Window, screen=MultiView_Screen, area=Active_Area, space_data=Active_Space, reg=Active_Region):
+        bpy.ops.screen.area_split(direction="HORIZONTAL", factor=1 / 2)
+
     MultiView_Screen.areas[0].type = "VIEW_3D"
     MultiView_Screen.areas[1].type = "VIEW_3D"
     MultiView_Screen.areas[2].type = "VIEW_3D"
 
-    # 3rd Step : Vertical Split .
+    # 3rd Step: Vertical Split.
     Active_Area = MultiView_Screen.areas[0]
     Active_Space = [space for space in Active_Area.spaces if space.type == "VIEW_3D"][0]
     Active_Region = [reg for reg in Active_Area.regions if reg.type == "WINDOW"][0]
-    context_override = {
-        "window": MultiView_Window,
-        "screen": MultiView_Screen,
-        "area": Active_Area,
-        "space_data": Active_Space,
-        "region": Active_Region,
-    }
-    execute_in_context(context_override, bpy.ops.screen.area_split,
-                       direction="VERTICAL", factor=1/2)
+
+    with bpy.context.temp_override(window=MultiView_Window, screen=MultiView_Screen, area=Active_Area, space_data=Active_Space, reg=Active_Region):
+        bpy.ops.screen.area_split(direction="VERTICAL", factor=1 / 2)
+
     MultiView_Screen.areas[0].type = "OUTLINER"
     MultiView_Screen.areas[1].type = "OUTLINER"
     MultiView_Screen.areas[2].type = "OUTLINER"
     MultiView_Screen.areas[3].type = "OUTLINER"
 
-    # 4th Step : Vertical Split .
+    # 4th Step: Vertical Split.
     Active_Area = MultiView_Screen.areas[2]
     Active_Space = [space for space in Active_Area.spaces if space.type == "VIEW_3D"][0]
     Active_Region = [reg for reg in Active_Area.regions if reg.type == "WINDOW"][0]
-    context_override = {
-        "window": MultiView_Window,
-        "screen": MultiView_Screen,
-        "area": Active_Area,
-        "space_data": Active_Space,
-        "region": Active_Region,
-    }
-    execute_in_context(context_override, bpy.ops.screen.area_split,
-                       direction="VERTICAL", factor=1/2)
+
+    with bpy.context.temp_override(window=MultiView_Window, screen=MultiView_Screen, area=Active_Area, space_data=Active_Space, reg=Active_Region):
+        bpy.ops.screen.area_split(direction="VERTICAL", factor=1 / 2)
+
     MultiView_Screen.areas[0].type = "VIEW_3D"
     MultiView_Screen.areas[1].type = "VIEW_3D"
     MultiView_Screen.areas[2].type = "VIEW_3D"
     MultiView_Screen.areas[3].type = "VIEW_3D"
     MultiView_Screen.areas[4].type = "VIEW_3D"
 
-    # 4th Step : Horizontal Split .
+    # 5th Step: Horizontal Split.
     Active_Area = MultiView_Screen.areas[1]
     Active_Space = [space for space in Active_Area.spaces if space.type == "VIEW_3D"][0]
     Active_Region = [reg for reg in Active_Area.regions if reg.type == "WINDOW"][0]
-    context_override = {
-        "window": MultiView_Window,
-        "screen": MultiView_Screen,
-        "area": Active_Area,
-        "space_data": Active_Space,
-        "region": Active_Region,
-    }
-    execute_in_context(context_override, bpy.ops.screen.area_split,
-                       direction="HORIZONTAL", factor=1/2)
+
+    with bpy.context.temp_override(window=MultiView_Window, screen=MultiView_Screen, area=Active_Area, space_data=Active_Space, reg=Active_Region):
+        bpy.ops.screen.area_split(direction="HORIZONTAL", factor=1 / 2)
 
     MultiView_Screen.areas[1].type = "OUTLINER"
     MultiView_Screen.areas[5].type = "PROPERTIES"
 
-    # Set MultiView Areas 3D prefferences :
+    # Set MultiView Areas 3D preferences:
     for MultiView_Area3D in MultiView_Screen.areas:
-
         if MultiView_Area3D.type == "VIEW_3D":
             MultiView_Space3D = [
                 space for space in MultiView_Area3D.spaces if space.type == "VIEW_3D"
             ][0]
 
-            context_override = {
-                "window": MultiView_Window,
-                "screen": MultiView_Screen,
-                "area": MultiView_Area3D,
-                "space_data": MultiView_Space3D,
-            }
-            execute_in_context(context_override, bpy.ops.wm.tool_set_by_id, name="builtin.move")
-            MultiView_Space3D.overlay.show_text = True
-            MultiView_Space3D.show_region_ui = False
-            MultiView_Space3D.show_region_toolbar = True
-            MultiView_Space3D.region_3d.view_perspective = "ORTHO"
-            MultiView_Space3D.show_gizmo_navigate = False
-            MultiView_Space3D.show_region_tool_header = False
-            MultiView_Space3D.overlay.show_floor = False
-            MultiView_Space3D.overlay.show_ortho_grid = False
-            MultiView_Space3D.overlay.show_relationship_lines = False
-            MultiView_Space3D.overlay.show_extras = True
-            MultiView_Space3D.overlay.show_bones = False
-            MultiView_Space3D.overlay.show_motion_paths = False
+            with bpy.context.temp_override(window=MultiView_Window, screen=MultiView_Screen, area=MultiView_Area3D, space_data=MultiView_Space3D):
+                bpy.ops.wm.tool_set_by_id(name="builtin.move")
 
-            MultiView_Space3D.shading.type = "SOLID"
-            MultiView_Space3D.shading.light = "STUDIO"
-            MultiView_Space3D.shading.studio_light = "outdoor.sl"
-            MultiView_Space3D.shading.color_type = "TEXTURE"
-            MultiView_Space3D.shading.background_type = "VIEWPORT"
-            MultiView_Space3D.shading.background_color = [0.7, 0.7, 0.7]
+                MultiView_Space3D.overlay.show_text = True
+                MultiView_Space3D.show_region_ui = False
+                MultiView_Space3D.show_region_toolbar = True
+                MultiView_Space3D.region_3d.view_perspective = "ORTHO"
+                MultiView_Space3D.show_gizmo_navigate = False
+                MultiView_Space3D.show_region_tool_header = False
+                MultiView_Space3D.overlay.show_floor = False
+                MultiView_Space3D.overlay.show_ortho_grid = False
+                MultiView_Space3D.overlay.show_relationship_lines = False
+                MultiView_Space3D.overlay.show_extras = True
+                MultiView_Space3D.overlay.show_bones = False
+                MultiView_Space3D.overlay.show_motion_paths = False
 
-            MultiView_Space3D.shading.type = "MATERIAL"
-            # 'Material' Shading Light method :
-            MultiView_Space3D.shading.use_scene_lights = True
-            MultiView_Space3D.shading.use_scene_world = False
+                MultiView_Space3D.shading.type = "SOLID"
+                MultiView_Space3D.shading.light = "STUDIO"
+                MultiView_Space3D.shading.studio_light = "outdoor.sl"
+                MultiView_Space3D.shading.color_type = "TEXTURE"
+                MultiView_Space3D.shading.background_type = "VIEWPORT"
+                MultiView_Space3D.shading.background_color = [0.7, 0.7, 0.7]
 
-            # 'RENDERED' Shading Light method :
-            MultiView_Space3D.shading.use_scene_lights_render = False
-            MultiView_Space3D.shading.use_scene_world_render = True
+                MultiView_Space3D.shading.type = "MATERIAL"
+                # 'Material' Shading Light method:
+                MultiView_Space3D.shading.use_scene_lights = True
+                MultiView_Space3D.shading.use_scene_world = False
 
-            MultiView_Space3D.shading.studio_light = "forest.exr"
-            MultiView_Space3D.shading.studiolight_rotate_z = 0
-            MultiView_Space3D.shading.studiolight_intensity = 1.5
-            MultiView_Space3D.shading.studiolight_background_alpha = 0.0
-            MultiView_Space3D.shading.studiolight_background_blur = 0.0
+                # 'RENDERED' Shading Light method:
+                MultiView_Space3D.shading.use_scene_lights_render = False
+                MultiView_Space3D.shading.use_scene_world_render = True
 
-            MultiView_Space3D.shading.render_pass = "COMBINED"
+                MultiView_Space3D.shading.studio_light = "forest.exr"
+                MultiView_Space3D.shading.studiolight_rotate_z = 0
+                MultiView_Space3D.shading.studiolight_intensity = 1.5
+                MultiView_Space3D.shading.studiolight_background_alpha = 0.0
+                MultiView_Space3D.shading.studiolight_background_blur = 0.0
 
-            MultiView_Space3D.show_region_header = False
+                MultiView_Space3D.shading.render_pass = "COMBINED"
+                MultiView_Space3D.show_region_header = False
 
-    # Top left
+    # Assign areas for later use:
     OUTLINER = MultiView_Screen.areas[1]
-    # Down left
     PROPERTIES = MultiView_Screen.areas[5]
-    # Top middle
     AXIAL = MultiView_Screen.areas[3]
-    # Top right
     CORONAL = MultiView_Screen.areas[0]
-    # Down right
     SAGITAL = MultiView_Screen.areas[2]
-    # Down middle
     VIEW_3D = MultiView_Screen.areas[4]
 
     return MultiView_Window, OUTLINER, PROPERTIES, AXIAL, CORONAL, SAGITAL, VIEW_3D
